@@ -1,22 +1,26 @@
 Sub GenerateMonthlySummaryOrdered()
 
+    ' Declare worksheet variables
     Dim wsSource As Worksheet, wsReport As Worksheet
-    Dim lastRow As Long, reportRow As Long
+    Dim wsMapAcc As Worksheet, wsMap As Worksheet
+    Dim wsExclude As Worksheet, wsExcludeAcc As Worksheet, wsOrder As Worksheet
+
+    ' Declare collections and dictionaries
     Dim dataDict As Object, mapDict As Object
     Dim excludeFundDict As Object, excludeAccountDict As Object
-    Dim fundOrderDict As Object
-    Dim mapAccountDict As Object
-    Dim i As Long
-    Dim key As Variant
-    Dim fund As String, mappedFund As String, desc As String, parent As String, adjParent As String
-    Dim fiscalYear As String, account As String
-    Dim periodTotal As Double
-    Dim monthVal As Variant, monthNum As Integer, monthName As String
-    Dim monthOrder As Variant, monthDict As Object
-    Dim headers As Collection
-    Dim allKeys As Collection
+    Dim fundOrderDict As Object, mapAccountDict As Object
+    Dim monthDict As Object
+    Dim headers As Collection, allKeys As Collection
 
-    ' Set sheets
+    ' Declare general variables
+    Dim lastRow As Long, reportRow As Long, i As Long
+    Dim fund As String, mappedFund As String, desc As String
+    Dim parent As String, adjParent As String, fiscalYear As String, account As String
+    Dim periodTotal As Double, monthVal As Variant, monthNum As Integer, monthName As String
+    Dim monthOrder As Variant, key As Variant
+    Dim m As Variant, k As Variant
+
+    ' Set worksheet references
     Set wsSource = ThisWorkbook.Sheets("Sheet1")
     On Error Resume Next
     Set wsReport = ThisWorkbook.Sheets("Sheet2")
@@ -28,8 +32,7 @@ Sub GenerateMonthlySummaryOrdered()
     End If
     On Error GoTo 0
 
-    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-
+    ' Initialize dictionaries and collections
     Set dataDict = CreateObject("Scripting.Dictionary")
     Set monthDict = CreateObject("Scripting.Dictionary")
     Set mapDict = CreateObject("Scripting.Dictionary")
@@ -39,87 +42,84 @@ Sub GenerateMonthlySummaryOrdered()
     Set mapAccountDict = CreateObject("Scripting.Dictionary")
     Set allKeys = New Collection
 
-    ' Load MappingAccount (with header)
-    Dim wsMapAcc As Worksheet
+    ' Load mapping sheets
     Set wsMapAcc = ThisWorkbook.Sheets("MappingAccount")
     i = 2
     Do While wsMapAcc.Cells(i, 1).Value <> ""
-        ' Key = Fund|Parent, value = SCO Account
         mapAccountDict(Trim(wsMapAcc.Cells(i, 1).Value) & "|" & Trim(wsMapAcc.Cells(i, 2).Value)) = Trim(wsMapAcc.Cells(i, 3).Value)
         i = i + 1
     Loop
 
-    ' Load MappingFund (no header)
-    Dim wsMap As Worksheet: Set wsMap = ThisWorkbook.Sheets("MappingFund")
+    Set wsMap = ThisWorkbook.Sheets("MappingFund")
     i = 1
     Do While wsMap.Cells(i, 1).Value <> ""
         mapDict(Trim(wsMap.Cells(i, 1).Value)) = Trim(wsMap.Cells(i, 2).Value)
         i = i + 1
     Loop
 
-    ' Load ExcludeFund (no header)
-    Dim wsExclude As Worksheet: Set wsExclude = ThisWorkbook.Sheets("ExcludeFund")
+    Set wsExclude = ThisWorkbook.Sheets("ExcludeFund")
     i = 1
     Do While wsExclude.Cells(i, 1).Value <> ""
         excludeFundDict(Trim(wsExclude.Cells(i, 1).Value)) = True
         i = i + 1
     Loop
 
-    ' Load ExcludeAccounts (no header)
-    Dim wsExcludeAcc As Worksheet: Set wsExcludeAcc = ThisWorkbook.Sheets("ExcludeAccounts")
+    Set wsExcludeAcc = ThisWorkbook.Sheets("ExcludeAccounts")
     i = 1
     Do While wsExcludeAcc.Cells(i, 1).Value <> ""
         excludeAccountDict(Trim(wsExcludeAcc.Cells(i, 1).Value)) = True
         i = i + 1
     Loop
 
-    ' Load Order sheet (no header)
-    Dim wsOrder As Worksheet: Set wsOrder = ThisWorkbook.Sheets("Order")
+    Set wsOrder = ThisWorkbook.Sheets("Order")
     i = 1
     Do While wsOrder.Cells(i, 1).Value <> ""
         fundOrderDict(Trim(wsOrder.Cells(i, 1).Value)) = i
         i = i + 1
     Loop
 
-    ' Month order
+    ' Month order used for output
     monthOrder = Array("Jan", "Feb", "Mar", "Apr", "May", "Jun", _
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
-    ' Process source data
+    ' Read and process source data
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
     For i = 2 To lastRow
         fund = Trim(wsSource.Cells(i, "I").Text)
         parent = Trim(wsSource.Cells(i, "C").Text)
         account = Trim(wsSource.Cells(i, "E").Text)
 
-        ' Default Adjusted Parent as before
+        ' Set default adjusted parent
         adjParent = IIf(Len(parent) > 1, Mid(parent, 2) & "00", "")
-
-        ' Override Adjusted Parent if MappingAccount has entry Fund|Parent
         If mapAccountDict.exists(fund & "|" & parent) Then
             adjParent = mapAccountDict(fund & "|" & parent)
         End If
 
-        ' Apply MappingFund for Fund (only changes fund)
+        ' Apply fund mapping
         If mapDict.exists(fund) Then
             mappedFund = mapDict(fund)
         Else
             mappedFund = fund
         End If
 
-        If excludeFundDict.exists(mappedFund) Then GoTo SkipRow
-        If excludeAccountDict.exists(account) Then GoTo SkipRow
+        ' Skip if fund or account is excluded
+        If excludeFundDict.exists(mappedFund) Or excludeAccountDict.exists(account) Then GoTo SkipRow
 
+        ' Collect remaining fields
         desc = Trim(wsSource.Cells(i, "D").Value)
         fiscalYear = Trim(wsSource.Cells(i, "A").Value)
         periodTotal = Val(wsSource.Cells(i, "G").Value)
-
         monthVal = wsSource.Cells(i, "B").Value
         If Not IsDate(monthVal) Then GoTo SkipRow
+
         monthNum = Month(monthVal)
         monthName = Format(DateSerial(1900, monthNum, 1), "mmm")
         monthDict(monthName) = True
 
+        ' Construct aggregation key
         key = mappedFund & "|" & desc & "|" & parent & "|" & fiscalYear
+
+        ' Create entry if it does not exist
         If Not dataDict.exists(key) Then
             Set dataDict(key) = CreateObject("Scripting.Dictionary")
             dataDict(key)("Fund") = mappedFund
@@ -131,6 +131,7 @@ Sub GenerateMonthlySummaryOrdered()
             allKeys.Add key
         End If
 
+        ' Aggregate by month and total
         If dataDict(key).exists(monthName) Then
             dataDict(key)(monthName) = dataDict(key)(monthName) + periodTotal
         Else
@@ -141,7 +142,7 @@ Sub GenerateMonthlySummaryOrdered()
 SkipRow:
     Next i
 
-    ' Prepare headers
+    ' Prepare header list
     Set headers = New Collection
     headers.Add "Fund"
     headers.Add "Description"
@@ -153,13 +154,13 @@ SkipRow:
     headers.Add "Total"
     headers.Add "FY"
 
-    ' Write headers
+    ' Write headers to report
     For i = 1 To headers.Count
         wsReport.Cells(1, i).Value = headers(i)
         wsReport.Cells(1, i).Font.Bold = True
     Next i
 
-    ' Sort keys
+    ' Sort keys based on custom fund order and parent code
     Dim sortedKeys() As String
     ReDim sortedKeys(1 To allKeys.Count)
     For i = 1 To allKeys.Count
@@ -176,12 +177,12 @@ SkipRow:
             Dim orderA As Long: orderA = IIf(fundOrderDict.exists(fundA), fundOrderDict(fundA), 999999)
             Dim orderB As Long: orderB = IIf(fundOrderDict.exists(fundB), fundOrderDict(fundB), 999999)
             Dim parentA As Long, parentB As Long
-            If IsNumeric(keyA(2)) Then parentA = CLng(keyA(2)) Else parentA = 9999999
-            If IsNumeric(keyB(2)) Then parentB = CLng(keyB(2)) Else parentB = 9999999
+            parentA = IIf(IsNumeric(keyA(2)), CLng(keyA(2)), 9999999)
+            parentB = IIf(IsNumeric(keyB(2)), CLng(keyB(2)), 9999999)
 
-            If orderA > orderB _
-                Or (orderA = orderB And fundA > fundB) _
-                Or (orderA = orderB And fundA = fundB And parentA > parentB) Then
+            If orderA > orderB Or _
+               (orderA = orderB And fundA > fundB) Or _
+               (orderA = orderB And fundA = fundB And parentA > parentB) Then
                 Dim temp As String
                 temp = sortedKeys(i)
                 sortedKeys(i) = sortedKeys(j)
@@ -190,15 +191,16 @@ SkipRow:
         Next j
     Next i
 
-    ' Write data
+    ' Write sorted data to report
     reportRow = 2
-    Dim monthColStart As Integer: monthColStart = 5 ' After Fund, Desc, Parent, Adjusted Parent
-    Dim totalColIndex As Integer
+    Dim monthColStart As Integer: monthColStart = 5
+    Dim totalColIndex As Integer, col As Integer
+    Dim dict As Object
 
     For i = 1 To UBound(sortedKeys)
         key = sortedKeys(i)
-        Dim dict As Object: Set dict = dataDict(key)
-        Dim col As Integer: col = 1
+        Set dict = dataDict(key)
+        col = 1
 
         wsReport.Cells(reportRow, col).Value = "'" & dict("Fund"): col = col + 1
         wsReport.Cells(reportRow, col).Value = dict("Description"): col = col + 1
@@ -207,11 +209,7 @@ SkipRow:
 
         For Each m In monthOrder
             If monthDict.exists(m) Then
-                If dict.exists(m) Then
-                    wsReport.Cells(reportRow, col).Value = dict(m)
-                Else
-                    wsReport.Cells(reportRow, col).Value = 0
-                End If
+                wsReport.Cells(reportRow, col).Value = IIf(dict.exists(m), dict(m), 0)
                 col = col + 1
             End If
         Next m
@@ -220,7 +218,6 @@ SkipRow:
         wsReport.Cells(reportRow, totalColIndex).Value = dict("Total"): col = col + 1
         wsReport.Cells(reportRow, col).Value = dict("FY")
 
-        ' Highlight row if total is negative
         If dict("Total") < 0 Then
             wsReport.Range(wsReport.Cells(reportRow, 1), wsReport.Cells(reportRow, headers.Count)).Interior.Color = RGB(255, 199, 206)
         End If
