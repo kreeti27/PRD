@@ -4,22 +4,17 @@ Sub GenerateMonthlySummaryOrdered()
     Dim lastRow As Long, reportRow As Long
     Dim dataDict As Object, mapDict As Object
     Dim excludeFundDict As Object, excludeAccountDict As Object
-    Dim fundOrderDict As Object, mapAccountDict As Object
-    Dim i As Long, j As Long
+    Dim fundOrderDict As Object
+    Dim mapAccountDict As Object
+    Dim i As Long
     Dim key As Variant
-    Dim fund As String, mappedFund As String, desc As String
-    Dim parent As String, adjParent As String, fiscalYear As String, account As String
+    Dim fund As String, mappedFund As String, desc As String, parent As String, adjParent As String
+    Dim fiscalYear As String, account As String
     Dim periodTotal As Double
     Dim monthVal As Variant, monthNum As Integer, monthName As String
     Dim monthOrder As Variant, monthDict As Object
-    Dim headers As Collection, allKeys As Collection
-
-    ' Rename sheets
-    On Error Resume Next
-    ThisWorkbook.Sheets("Sheet1").Name = "Data"
-    ThisWorkbook.Sheets("Sheet2").Name = "Revenue Report"
-    ThisWorkbook.Sheets("Order").Name = "FundOrder"
-    On Error GoTo 0
+    Dim headers As Collection
+    Dim allKeys As Collection
 
     ' Set sheets
     Set wsSource = ThisWorkbook.Sheets("Data")
@@ -44,15 +39,17 @@ Sub GenerateMonthlySummaryOrdered()
     Set mapAccountDict = CreateObject("Scripting.Dictionary")
     Set allKeys = New Collection
 
-    ' Load MappingAccount
-    Dim wsMapAcc As Worksheet: Set wsMapAcc = ThisWorkbook.Sheets("MappingAccount")
+    ' Load MappingAccount (with header)
+    Dim wsMapAcc As Worksheet
+    Set wsMapAcc = ThisWorkbook.Sheets("MappingAccount")
     i = 2
     Do While wsMapAcc.Cells(i, 1).Value <> ""
+        ' Key = Fund|Parent, value = SCO Account (keep leading zeros)
         mapAccountDict(Trim(wsMapAcc.Cells(i, 1).Value) & "|" & Trim(wsMapAcc.Cells(i, 2).Value)) = Trim(wsMapAcc.Cells(i, 3).Value)
         i = i + 1
     Loop
 
-    ' Load MappingFund
+    ' Load MappingFund (no header)
     Dim wsMap As Worksheet: Set wsMap = ThisWorkbook.Sheets("MappingFund")
     i = 1
     Do While wsMap.Cells(i, 1).Value <> ""
@@ -60,7 +57,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
-    ' Load ExcludeFund
+    ' Load ExcludeFund (no header)
     Dim wsExclude As Worksheet: Set wsExclude = ThisWorkbook.Sheets("ExcludeFund")
     i = 1
     Do While wsExclude.Cells(i, 1).Value <> ""
@@ -68,7 +65,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
-    ' Load ExcludeAccounts
+    ' Load ExcludeAccounts (no header)
     Dim wsExcludeAcc As Worksheet: Set wsExcludeAcc = ThisWorkbook.Sheets("ExcludeAccounts")
     i = 1
     Do While wsExcludeAcc.Cells(i, 1).Value <> ""
@@ -76,7 +73,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
-    ' Load Fund Order
+    ' Load FundOrder sheet (no header)
     Dim wsOrder As Worksheet: Set wsOrder = ThisWorkbook.Sheets("FundOrder")
     i = 1
     Do While wsOrder.Cells(i, 1).Value <> ""
@@ -84,6 +81,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
+    ' Month order
     monthOrder = Array("Jan", "Feb", "Mar", "Apr", "May", "Jun", _
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -93,20 +91,29 @@ Sub GenerateMonthlySummaryOrdered()
         parent = Trim(wsSource.Cells(i, "C").Text)
         account = Trim(wsSource.Cells(i, "E").Text)
 
+        ' Default Adjusted Parent as before
         adjParent = IIf(Len(parent) > 1, Mid(parent, 2) & "00", "")
+
+        ' Override Adjusted Parent if MappingAccount has entry Fund|Parent
         If mapAccountDict.exists(fund & "|" & parent) Then
             adjParent = mapAccountDict(fund & "|" & parent)
         End If
-        If Len(adjParent) > 6 Then adjParent = Left(adjParent, 6)
 
+        ' Truncate adjParent (SCO Revenue Code) to max 6 chars, keep leading zeros
+        If Len(adjParent) > 6 Then
+            adjParent = Left(adjParent, 6)
+        End If
+
+        ' Apply MappingFund for Fund (only changes fund)
         If mapDict.exists(fund) Then
             mappedFund = mapDict(fund)
         Else
             mappedFund = fund
         End If
 
-        If excludeFundDict.exists(mappedFund) Then GoTo SkipRow
-        If excludeAccountDict.exists(account) Then GoTo SkipRow
+        ' Exclusion logic (uncomment if needed)
+        'If excludeFundDict.exists(mappedFund) Then GoTo SkipRow
+        'If excludeAccountDict.exists(account) Then GoTo SkipRow
 
         desc = Trim(wsSource.Cells(i, "D").Value)
         fiscalYear = Trim(wsSource.Cells(i, "A").Value)
@@ -118,24 +125,20 @@ Sub GenerateMonthlySummaryOrdered()
         monthName = Format(DateSerial(1900, monthNum, 1), "mmm")
         monthDict(monthName) = True
 
-        key = mappedFund & "|" & desc & "|" & parent & "|" & fiscalYear
+        key = mappedFund & "|" & desc & "|" & adjParent & "|" & fiscalYear
         If Not dataDict.exists(key) Then
             Set dataDict(key) = CreateObject("Scripting.Dictionary")
             dataDict(key)("Fund") = mappedFund
             dataDict(key)("Description") = desc
-            dataDict(key)("AdjustedParent") = adjParent
+            dataDict(key)("SCO Revenue Code") = adjParent
             dataDict(key)("FY") = fiscalYear
-            dataDict(key)("Parent") = parent
-            dataDict(key)("Total") = 0
+            For Each m In monthOrder
+                dataDict(key)(m) = 0
+            Next m
             allKeys.Add key
         End If
 
-        If dataDict(key).exists(monthName) Then
-            dataDict(key)(monthName) = dataDict(key)(monthName) + periodTotal
-        Else
-            dataDict(key)(monthName) = periodTotal
-        End If
-        dataDict(key)("Total") = dataDict(key)("Total") + periodTotal
+        dataDict(key)(monthName) = dataDict(key)(monthName) + periodTotal
 
 SkipRow:
     Next i
@@ -148,7 +151,6 @@ SkipRow:
     For Each m In monthOrder
         If monthDict.exists(m) Then headers.Add m
     Next m
-    headers.Add "Total"
     headers.Add "FY"
 
     ' Write headers
@@ -157,23 +159,48 @@ SkipRow:
         wsReport.Cells(1, i).Font.Bold = True
     Next i
 
-    ' Sort keys by Fund Order
+    ' Sort keys by FY (asc), Fund (FundOrder), SCO Revenue Code (numeric asc)
     Dim sortedKeys() As String
     ReDim sortedKeys(1 To allKeys.Count)
     For i = 1 To allKeys.Count
         sortedKeys(i) = allKeys(i)
     Next i
 
+    Dim j As Long
     For i = 1 To UBound(sortedKeys) - 1
         For j = i + 1 To UBound(sortedKeys)
             Dim keyA As Variant: keyA = Split(sortedKeys(i), "|")
             Dim keyB As Variant: keyB = Split(sortedKeys(j), "|")
+            Dim fyA As Long: fyA = CLng(keyA(3))
+            Dim fyB As Long: fyB = CLng(keyB(3))
+
             Dim fundA As String: fundA = keyA(0)
             Dim fundB As String: fundB = keyB(0)
             Dim orderA As Long: orderA = IIf(fundOrderDict.exists(fundA), fundOrderDict(fundA), 999999)
             Dim orderB As Long: orderB = IIf(fundOrderDict.exists(fundB), fundOrderDict(fundB), 999999)
 
-            If orderA > orderB Or (orderA = orderB And fundA > fundB) Then
+            Dim scoA As String: scoA = keyA(2)
+            Dim scoB As String: scoB = keyB(2)
+            Dim scoANum As Double, scoBNum As Double
+            ' Convert SCO Revenue Code to number for comparison, leading zeros ignored here but kept in display
+            If IsNumeric(scoA) Then scoANum = CDbl(scoA) Else scoANum = 999999999
+            If IsNumeric(scoB) Then scoBNum = CDbl(scoB) Else scoBNum = 999999999
+
+            Dim swapNeeded As Boolean: swapNeeded = False
+
+            If fyA > fyB Then
+                swapNeeded = True
+            ElseIf fyA = fyB Then
+                If orderA > orderB Then
+                    swapNeeded = True
+                ElseIf orderA = orderB Then
+                    If scoANum > scoBNum Then
+                        swapNeeded = True
+                    End If
+                End If
+            End If
+
+            If swapNeeded Then
                 Dim temp As String
                 temp = sortedKeys(i)
                 sortedKeys(i) = sortedKeys(j)
@@ -182,11 +209,9 @@ SkipRow:
         Next j
     Next i
 
-    ' Write data rows
+    ' Write data
     reportRow = 2
-    Dim monthColStart As Integer: monthColStart = 4
-    Dim totalColIndex As Integer
-
+    Dim monthColStart As Integer: monthColStart = 4 ' After Fund, Desc, SCO Revenue Code
     For i = 1 To UBound(sortedKeys)
         key = sortedKeys(i)
         Dim dict As Object: Set dict = dataDict(key)
@@ -194,41 +219,32 @@ SkipRow:
 
         wsReport.Cells(reportRow, col).Value = "'" & dict("Fund"): col = col + 1
         wsReport.Cells(reportRow, col).Value = dict("Description"): col = col + 1
-        wsReport.Cells(reportRow, col).Value = "'" & dict("AdjustedParent"): col = col + 1
+        wsReport.Cells(reportRow, col).Value = dict("SCO Revenue Code"): col = col + 1
 
         For Each m In monthOrder
             If monthDict.exists(m) Then
-                wsReport.Cells(reportRow, col).Value = IIf(dict.exists(m), dict(m), 0)
+                wsReport.Cells(reportRow, col).Value = dict(m)
                 col = col + 1
             End If
         Next m
 
-        totalColIndex = col
-        wsReport.Cells(reportRow, totalColIndex).Value = dict("Total")
-        wsReport.Cells(reportRow, totalColIndex).Font.Bold = True
-        col = col + 1
         wsReport.Cells(reportRow, col).Value = dict("FY")
 
-        ' Highlight yellow if Fund = 094001
-        If dict("Fund") = "094001" Then
-            wsReport.Range(wsReport.Cells(reportRow, 1), wsReport.Cells(reportRow, headers.Count)).Interior.Color = RGB(255, 255, 153)
-        End If
-
-        ' Highlight red if negative total
-        If dict("Total") < 0 Then
-            wsReport.Range(wsReport.Cells(reportRow, 1), wsReport.Cells(reportRow, headers.Count)).Interior.Color = RGB(255, 199, 206)
+        ' Highlight whole row yellow if fund = "0044094"
+        If dict("Fund") = "0044094" Then
+            wsReport.Range(wsReport.Cells(reportRow, 1), wsReport.Cells(reportRow, headers.Count)).Interior.Color = RGB(255, 255, 0)
         End If
 
         reportRow = reportRow + 1
     Next i
 
-    ' Format numbers
+    ' Apply number formatting to month columns
     Dim colIndex As Integer
-    For colIndex = monthColStart To monthColStart + monthDict.Count
+    For colIndex = monthColStart To monthColStart + monthDict.Count - 1
         wsReport.Columns(colIndex).NumberFormat = "#,##0.00"
     Next colIndex
 
     wsReport.Columns.AutoFit
-    MsgBox "Revenue Report generated successfully.", vbInformation
+    MsgBox "Ordered report generated in Revenue Report with fiscal year, fund order, and SCO Revenue Code sorting.", vbInformation
 
 End Sub
