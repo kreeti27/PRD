@@ -8,6 +8,7 @@ Sub PopulateTRTemplate()
     Dim fund As String, scoCode As String, totalVal As Double, fy As String
     Dim agency As String, account As String, colA As String
     Dim amountSum As Double
+    Dim savePath As String, saveFileName As String
 
     ' Prompt for inputs
     transferReq = InputBox("Enter Transfer Request Number")
@@ -77,34 +78,34 @@ Sub PopulateTRTemplate()
                 End If
             End If
 
-            ' Preserve leading zeros by forcing text with apostrophe
+            ' Preserve leading zeros by forcing text
             fund = "'" & fund
             scoCode = "'" & scoCode
             If agency <> "" Then agency = "'" & agency
 
             With wsDest
-                .Cells(destRow, 1).Value = fund                 ' Fund
-                .Cells(destRow, 2).Value = agency               ' Agency
-                .Cells(destRow, 3).Value = fiscalYear           ' Fiscal Year
-                .Cells(destRow, 4).Value = ""                   ' Ref Item
-                .Cells(destRow, 5).Value = ""                   ' Fed Cat
-                .Cells(destRow, 6).Value = ""                   ' P/N
-                .Cells(destRow, 7).Value = ""                   ' C
-                .Cells(destRow, 8).Value = ""                   ' Cat
-                .Cells(destRow, 9).Value = ""                   ' Pgm
-                .Cells(destRow, 10).Value = ""                  ' Ele
-                .Cells(destRow, 11).Value = ""                  ' Comp
-                .Cells(destRow, 12).Value = ""                  ' Task
-                .Cells(destRow, 13).Value = account             ' Account
-                .Cells(destRow, 14).Value = scoCode             ' Rev/Obj
-                .Cells(destRow, 15).Value = "C"                 ' D/C
-                .Cells(destRow, 16).Value = colA                ' A
-                .Cells(destRow, 17).Value = ""                  ' Source Fund
-                .Cells(destRow, 18).Value = totalVal            ' Amount
+                .Cells(destRow, 1).Value = fund
+                .Cells(destRow, 2).Value = agency
+                .Cells(destRow, 3).Value = fiscalYear
+                .Cells(destRow, 4).Value = ""
+                .Cells(destRow, 5).Value = ""
+                .Cells(destRow, 6).Value = ""
+                .Cells(destRow, 7).Value = ""
+                .Cells(destRow, 8).Value = ""
+                .Cells(destRow, 9).Value = ""
+                .Cells(destRow, 10).Value = ""
+                .Cells(destRow, 11).Value = ""
+                .Cells(destRow, 12).Value = ""
+                .Cells(destRow, 13).Value = account
+                .Cells(destRow, 14).Value = scoCode
+                .Cells(destRow, 15).Value = "C"
+                .Cells(destRow, 16).Value = colA
+                .Cells(destRow, 17).Value = ""
+                .Cells(destRow, 18).Value = totalVal
                 .Cells(destRow, 18).NumberFormat = "#,##0.00"
-                .Cells(destRow, 19).Value = "TRF REQ " & transferReq  ' Description
-                .Cells(destRow, 20).Value = ""                  ' DNKP
-                .Cells(destRow, 21).Value = ""                  ' Prgm Desc
+                .Cells(destRow, 19).Value = "TRF REQ " & transferReq
+                .Cells(destRow, 20).Value = ""
+                .Cells(destRow, 21).Value = ""
             End With
 
             amountSum = amountSum + totalVal
@@ -117,6 +118,21 @@ Sub PopulateTRTemplate()
     wsDest.Range("R2").NumberFormat = "#,##0.00"
     wsDest.Range("S2").Value = "TRF REQ " & transferReq
 
-    MsgBox "TR Template has been populated successfully.", vbInformation
+    ' Ask user for location to save
+    Dim fDialog As FileDialog
+    Set fDialog = Application.FileDialog(msoFileDialogFolderPicker)
+
+    If fDialog.Show <> -1 Then
+        MsgBox "Save cancelled. The workbook was not saved.", vbExclamation
+        Exit Sub
+    End If
+
+    savePath = fDialog.SelectedItems(1)
+    saveFileName = "TR" & transferReq & "_" & Format(Date, "MM-dd-yy") & ".xlsx"
+
+    ' Save copy of current workbook
+    ThisWorkbook.SaveCopyAs savePath & "\" & saveFileName
+
+    MsgBox "TR Template has been populated and saved successfully as '" & saveFileName & "'.", vbInformation
 
 End Sub
