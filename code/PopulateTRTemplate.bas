@@ -59,20 +59,25 @@ Sub PopulateTRTemplate()
             scoCode = Trim(wsSource.Cells(i, colCode).Text)
             totalVal = wsSource.Cells(i, colTotal).Value
 
-            ' If code is 084000, override fund and account
+            ' Default values
+            account = ""
+            colA = "R"
+
+            ' If code is 084000, override fund, account, A, and agency
             If scoCode = "084000" Then
                 fund = "0044"
                 account = "3730"
                 colA = "G"
+                agency = ""  ' override with blank
             Else
-                account = ""
-                colA = "R"
+                If fundMap.exists(fund) Then
+                    agency = fundMap(fund)
+                Else
+                    agency = ""
+                End If
             End If
 
-            agency = ""
-            If fundMap.exists(fund) Then agency = fundMap(fund)
-
-            ' Preserve leading zeros by writing as text
+            ' Preserve leading zeros by forcing text with apostrophe
             fund = "'" & fund
             scoCode = "'" & scoCode
             If agency <> "" Then agency = "'" & agency
