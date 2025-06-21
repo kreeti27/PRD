@@ -1,4 +1,3 @@
-
 Sub PopulateTRTemplate()
 
     Dim wsSource As Worksheet, wsDest As Worksheet, wsMap As Worksheet
@@ -8,7 +7,7 @@ Sub PopulateTRTemplate()
     Dim transferReq As String, fiscalYear As String
     Dim fund As String, scoCode As String, totalVal As Double, fy As String
     Dim agency As String, account As String, colA As String
-    Dim cell As Range, amountSum As Double
+    Dim amountSum As Double
 
     ' Prompt for inputs
     transferReq = InputBox("Enter Transfer Request Number")
@@ -60,9 +59,6 @@ Sub PopulateTRTemplate()
             scoCode = Trim(wsSource.Cells(i, colCode).Text)
             totalVal = wsSource.Cells(i, colTotal).Value
 
-            ' Preserve leading zeros
-            If Len(fund) < 4 Then fund = Right("0000" & fund, 4)
-
             ' If code is 084000, override fund and account
             If scoCode = "084000" Then
                 fund = "0044"
@@ -76,29 +72,34 @@ Sub PopulateTRTemplate()
             agency = ""
             If fundMap.exists(fund) Then agency = fundMap(fund)
 
+            ' Preserve leading zeros by writing as text
+            fund = "'" & fund
+            scoCode = "'" & scoCode
+            If agency <> "" Then agency = "'" & agency
+
             With wsDest
-                .Cells(destRow, 1).Value = fund
-                .Cells(destRow, 2).Value = agency
-                .Cells(destRow, 3).Value = fiscalYear
-                .Cells(destRow, 4).Value = ""
-                .Cells(destRow, 5).Value = ""
-                .Cells(destRow, 6).Value = ""
-                .Cells(destRow, 7).Value = ""
-                .Cells(destRow, 8).Value = ""
-                .Cells(destRow, 9).Value = ""
-                .Cells(destRow, 10).Value = ""
-                .Cells(destRow, 11).Value = ""
-                .Cells(destRow, 12).Value = ""
-                .Cells(destRow, 13).Value = account
-                .Cells(destRow, 14).Value = scoCode
-                .Cells(destRow, 15).Value = "C"
-                .Cells(destRow, 16).Value = colA
-                .Cells(destRow, 17).Value = ""
-                .Cells(destRow, 18).Value = totalVal
+                .Cells(destRow, 1).Value = fund                 ' Fund
+                .Cells(destRow, 2).Value = agency               ' Agency
+                .Cells(destRow, 3).Value = fiscalYear           ' Fiscal Year
+                .Cells(destRow, 4).Value = ""                   ' Ref Item
+                .Cells(destRow, 5).Value = ""                   ' Fed Cat
+                .Cells(destRow, 6).Value = ""                   ' P/N
+                .Cells(destRow, 7).Value = ""                   ' C
+                .Cells(destRow, 8).Value = ""                   ' Cat
+                .Cells(destRow, 9).Value = ""                   ' Pgm
+                .Cells(destRow, 10).Value = ""                  ' Ele
+                .Cells(destRow, 11).Value = ""                  ' Comp
+                .Cells(destRow, 12).Value = ""                  ' Task
+                .Cells(destRow, 13).Value = account             ' Account
+                .Cells(destRow, 14).Value = scoCode             ' Rev/Obj
+                .Cells(destRow, 15).Value = "C"                 ' D/C
+                .Cells(destRow, 16).Value = colA                ' A
+                .Cells(destRow, 17).Value = ""                  ' Source Fund
+                .Cells(destRow, 18).Value = totalVal            ' Amount
                 .Cells(destRow, 18).NumberFormat = "#,##0.00"
-                .Cells(destRow, 19).Value = "TRF REQ " & transferReq
-                .Cells(destRow, 20).Value = ""
-                .Cells(destRow, 21).Value = ""
+                .Cells(destRow, 19).Value = "TRF REQ " & transferReq  ' Description
+                .Cells(destRow, 20).Value = ""                  ' DNKP
+                .Cells(destRow, 21).Value = ""                  ' Prgm Desc
             End With
 
             amountSum = amountSum + totalVal
