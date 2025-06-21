@@ -118,7 +118,8 @@ Sub PopulateTRTemplate()
     wsDest.Range("R2").NumberFormat = "#,##0.00"
     wsDest.Range("S2").Value = "TRF REQ " & transferReq
 
-    ' Ask user for location to save
+    ' --- Begin updated save to new workbook and save file ---
+
     Dim fDialog As FileDialog
     Set fDialog = Application.FileDialog(msoFileDialogFolderPicker)
 
@@ -130,8 +131,24 @@ Sub PopulateTRTemplate()
     savePath = fDialog.SelectedItems(1)
     saveFileName = "TR" & transferReq & "_" & Format(Date, "MM-dd-yy") & ".xlsx"
 
-    ' Save copy of current workbook
-    ThisWorkbook.SaveCopyAs savePath & "\" & saveFileName
+    Dim wbNew As Workbook
+    Dim wsCopy As Worksheet
+
+    Set wsCopy = wsDest
+    Set wbNew = Workbooks.Add(xlWBATWorksheet) ' new workbook with 1 sheet
+
+    ' Delete default sheet in new workbook
+    Application.DisplayAlerts = False
+    wbNew.Sheets(1).Delete
+    Application.DisplayAlerts = True
+
+    ' Copy "TR Template" sheet to new workbook as first sheet
+    wsCopy.Copy Before:=wbNew.Sheets(1)
+
+    ' Save the new workbook
+    wbNew.SaveAs Filename:=savePath & "\" & saveFileName, FileFormat:=xlOpenXMLWorkbook
+
+    wbNew.Close SaveChanges:=False
 
     MsgBox "TR Template has been populated and saved successfully as '" & saveFileName & "'.", vbInformation
 
