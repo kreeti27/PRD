@@ -14,13 +14,29 @@ Sub GenerateMonthlySummaryOrdered()
     Dim monthOrder As Variant, monthDict As Object
     Dim headers As Collection, allKeys As Collection
 
+    ' Rename sheets
     On Error Resume Next
     ThisWorkbook.Sheets("Sheet1").Name = "Data"
     ThisWorkbook.Sheets("Sheet2").Name = "Revenue Report"
     ThisWorkbook.Sheets("Order").Name = "FundOrder"
     On Error GoTo 0
 
+    ' Check if "Data" sheet exists
+    On Error Resume Next
     Set wsSource = ThisWorkbook.Sheets("Data")
+    On Error GoTo 0
+    If wsSource Is Nothing Then
+        MsgBox "The 'Data' sheet is missing. Please ensure it exists before running the report.", vbCritical
+        Exit Sub
+    End If
+
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+    If lastRow < 2 Then
+        MsgBox "'Data' sheet is empty. Please provide source data before running the report.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Set report sheet
     On Error Resume Next
     Set wsReport = ThisWorkbook.Sheets("Revenue Report")
     If wsReport Is Nothing Then
@@ -31,8 +47,6 @@ Sub GenerateMonthlySummaryOrdered()
     End If
     On Error GoTo 0
 
-    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-
     Set dataDict = CreateObject("Scripting.Dictionary")
     Set monthDict = CreateObject("Scripting.Dictionary")
     Set mapDict = CreateObject("Scripting.Dictionary")
@@ -42,6 +56,7 @@ Sub GenerateMonthlySummaryOrdered()
     Set mapAccountDict = CreateObject("Scripting.Dictionary")
     Set allKeys = New Collection
 
+    ' Load MappingAccount
     Dim wsMapAcc As Worksheet: Set wsMapAcc = ThisWorkbook.Sheets("MappingAccount")
     i = 2
     Do While wsMapAcc.Cells(i, 1).Value <> ""
@@ -49,6 +64,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
+    ' Load MappingFund
     Dim wsMap As Worksheet: Set wsMap = ThisWorkbook.Sheets("MappingFund")
     i = 1
     Do While wsMap.Cells(i, 1).Value <> ""
@@ -56,6 +72,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
+    ' Load ExcludeFund
     Dim wsExclude As Worksheet: Set wsExclude = ThisWorkbook.Sheets("ExcludeFund")
     i = 1
     Do While wsExclude.Cells(i, 1).Value <> ""
@@ -63,6 +80,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
+    ' Load ExcludeAccounts
     Dim wsExcludeAcc As Worksheet: Set wsExcludeAcc = ThisWorkbook.Sheets("ExcludeAccounts")
     i = 1
     Do While wsExcludeAcc.Cells(i, 1).Value <> ""
@@ -70,6 +88,7 @@ Sub GenerateMonthlySummaryOrdered()
         i = i + 1
     Loop
 
+    ' Load Fund Order
     Dim wsOrder As Worksheet: Set wsOrder = ThisWorkbook.Sheets("FundOrder")
     i = 1
     Do While wsOrder.Cells(i, 1).Value <> ""
@@ -80,6 +99,7 @@ Sub GenerateMonthlySummaryOrdered()
     monthOrder = Array("Jan", "Feb", "Mar", "Apr", "May", "Jun", _
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
+    ' Process source data
     For i = 2 To lastRow
         fund = Trim(wsSource.Cells(i, "I").Text)
         parent = Trim(wsSource.Cells(i, "C").Text)
@@ -110,7 +130,7 @@ Sub GenerateMonthlySummaryOrdered()
         monthName = Format(DateSerial(1900, monthNum, 1), "mmm")
         monthDict(monthName) = True
 
-        key = mappedFund & "|" & desc & "|" & parent & "|" & fiscalYear
+        key = fiscalYear & "|" & mappedFund & "|" & desc & "|" & parent
         If Not dataDict.exists(key) Then
             Set dataDict(key) = CreateObject("Scripting.Dictionary")
             dataDict(key)("Fund") = mappedFund
@@ -132,6 +152,7 @@ Sub GenerateMonthlySummaryOrdered()
 SkipRow:
     Next i
 
+    ' Prepare headers
     Set headers = New Collection
     headers.Add "Fund"
     headers.Add "Description"
@@ -142,11 +163,13 @@ SkipRow:
     headers.Add "Total"
     headers.Add "FY"
 
+    ' Write headers
     For i = 1 To headers.Count
         wsReport.Cells(1, i).Value = headers(i)
         wsReport.Cells(1, i).Font.Bold = True
     Next i
 
+    ' Sort keys by FY, Fund Order, SCO Revenue Code
     Dim sortedKeys() As String
     ReDim sortedKeys(1 To allKeys.Count)
     For i = 1 To allKeys.Count
@@ -155,23 +178,23 @@ SkipRow:
 
     For i = 1 To UBound(sortedKeys) - 1
         For j = i + 1 To UBound(sortedKeys)
-            Dim keyA As Variant: keyA = Split(sortedKeys(i), "|")
-            Dim keyB As Variant: keyB = Split(sortedKeys(j), "|")
+            Dim a() As String: a = Split(sortedKeys(i), "|")
+            Dim b() As String: b = Split(sortedKeys(j), "|")
 
-            Dim fyA As Long: fyA = Val(keyA(3))
-            Dim fyB As Long: fyB = Val(keyB(3))
+            Dim fyA As Long: fyA = Val(a(0))
+            Dim fyB As Long: fyB = Val(b(0))
 
-            Dim fundA As String: fundA = keyA(0)
-            Dim fundB As String: fundB = keyB(0)
-            Dim orderA As Long: orderA = IIf(fundOrderDict.exists(fundA), fundOrderDict(fundA), 999999)
-            Dim orderB As Long: orderB = IIf(fundOrderDict.exists(fundB), fundOrderDict(fundB), 999999)
-
+            Dim fundA As String: fundA = a(1)
+            Dim fundB As String: fundB = b(1)
             Dim scoA As String: scoA = dataDict(sortedKeys(i))("AdjustedParent")
             Dim scoB As String: scoB = dataDict(sortedKeys(j))("AdjustedParent")
 
+            Dim ordA As Long: ordA = IIf(fundOrderDict.exists(fundA), fundOrderDict(fundA), 999999)
+            Dim ordB As Long: ordB = IIf(fundOrderDict.exists(fundB), fundOrderDict(fundB), 999999)
+
             If fyA > fyB _
-            Or (fyA = fyB And orderA > orderB) _
-            Or (fyA = fyB And orderA = orderB And scoA > scoB) Then
+                Or (fyA = fyB And ordA > ordB) _
+                Or (fyA = fyB And ordA = ordB And CLng(scoA) > CLng(scoB)) Then
                 Dim temp As String
                 temp = sortedKeys(i)
                 sortedKeys(i) = sortedKeys(j)
@@ -180,6 +203,7 @@ SkipRow:
         Next j
     Next i
 
+    ' Write data
     reportRow = 2
     Dim monthColStart As Integer: monthColStart = 4
     Dim totalColIndex As Integer
@@ -217,6 +241,7 @@ SkipRow:
         reportRow = reportRow + 1
     Next i
 
+    ' Format
     Dim colIndex As Integer
     For colIndex = monthColStart To monthColStart + monthDict.Count
         wsReport.Columns(colIndex).NumberFormat = "#,##0.00"
